@@ -10,10 +10,17 @@ plugins:
   - serverless-offline
   - serverless-dotenv-plugin # Load .env as environment variables
 
+custom:
+  # Our stage is based on what is passed in when running serverless
+  # commands. Or falls back to what we have set in the provider section.
+  stage: ${opt:stage, self:provider.stage}
+  # Name of the SST app that's deploying our infrastructure
+  sstApp: ${self:custom.stage}-notes-infra
+
 provider:
   name: aws
   runtime: nodejs10.x
-  stage: prod # dev prod
+  stage: dev # dev prod
   region: us-east-1
   # To load environment variables externally
   # rename env.example to .env and uncomment
@@ -24,8 +31,8 @@ provider:
   #  SAMPLE_ENV_VAR: ${env:SAMPLE_ENV_VAR}
 
   environment:
-    tableName: notes
     stripeSecretKey: ${env:STRIPE_SECRET_KEY}
+    tableName: !ImportValue "${self:custom.sstApp}-TableName"
 
   # 'iamRoleStatements' defines the permission policy for the Lambda function.
   # In this case Lambda functions are granted with permissions to access DynamoDB.
@@ -39,11 +46,14 @@ provider:
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
         - dynamodb:DescribeTable
-      Resource: "arn:aws:dynamodb:us-east-1:*:*"
+      Resource:
+        - !ImportValue "${self:custom.sstApp}-TableArn"
 # Create our resources with separate CloudFormation templates
 resources:
   # API Gateway Errors
   - ${file(resources/api-gateway-errors.yml)}
+  # Cognito Identity Pool Policy
+  - ${file(resources/cognito-policy.yml)}
 
 functions:
   # Defines an HTTP API endpoint that calls the main function in create.js
